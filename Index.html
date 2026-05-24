@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TG Legacy 4S</title>
+    <style>
+        body { font-family: Helvetica, Arial, sans-serif; background: #e7ebf0; margin: 0; padding: 10px; color: #222; }
+        .wrapper { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); max-width: 400px; margin: 0 auto; }
+        h3 { margin-top: 0; color: #2481cc; font-size: 18px; text-align: center; }
+        input, button { width: 100%; padding: 12px; margin-top: 8px; box-sizing: border-box; border-radius: 4px; font-size: 16px; }
+        input { border: 1px solid #ccc; background: #fafafa; }
+        button { background: #2481cc; color: #fff; border: none; font-weight: bold; cursor: pointer; }
+        #chat-box { height: 220px; overflow-y: scroll; border: 1px solid #ddd; padding: 8px; margin-top: 10px; background: #f9f9f9; font-size: 14px; }
+        .msg { margin-bottom: 8px; padding: 6px 10px; border-radius: 6px; max-width: 85%; word-wrap: break-word; }
+        .in { background: #eee; align-self: flex-start; }
+        .out { background: #e1f3fc; margin-left: auto; text-align: right; }
+        .system { color: #777; font-size: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <h3>Telegram Legacy Client</h3>
+    
+    <!-- Форма первого входа для Chat ID -->
+    <div id="setup-view">
+        <p style="font-size:14px; text-align:center;">Введите ваш личный Chat ID из бота @userinfobot для привязки аккаунта:</p>
+        <input type="number" id="chat-id-input" placeholder="Например: 123456789">
+        <button onclick="saveChatId()">Войти в сессию</button>
+    </div>
+
+    <!-- Основной интерфейс чата -->
+    <div id="chat-view" style="display:none;">
+        <div id="chat-box">Загрузка истории...</div>
+        <input type="text" id="msg-input" placeholder="Напишите сообщение...">
+        <button onclick="sendMessage()">Отправить</button>
+        <button onclick="clearSession()" style="background:#cc2424; margin-top:15px; padding:6px; font-size:12px;">Сбросить сессию</button>
+    </div>
+</div>
+
+<script>
+    // Токен вашего бота намертво вшит в код
+    var BOT_TOKEN = '8818678563:AAEZLJto5DLj0_xYhDz5v9Cw1IepQXaxf3c';
+    var chatId = localStorage.getItem('tg_chat_id_4s');
+
+    if (chatId) {
+        initChat();
+    }
+
+    function saveChatId() {
+        var inputVal = document.getElementById('chat-id-input').value;
+        if (inputVal.trim() !== '') {
+            localStorage.setItem('tg_chat_id_4s', inputVal.trim());
+            chatId = inputVal.trim();
+            initChat();
+        }
+    }
+
+    function initChat() {
+        document.getElementById('setup-view').style.display = 'none';
+        document.getElementById('chat-view').style.display = 'block';
+        loadMessages();
+        // Каждые 5 секунд проверяем новые сообщения (Long Polling заменен на легкий Pull для старых систем)
+        setInterval(loadMessages, 5000);
+    }
+
+    function loadMessages() {
+        var url = 'https://telegram.org' + BOT_TOKEN + '/getUpdates?limit=10&allowed_updates=["message"]';
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                var updates = response.result || [];
+                var chatBox = document.getElementById('chat-box');
+                var html = '';
+                
+                if (updates.length === 0) {
+                    chatBox.innerHTML = '<div class="msg system">История пуста. Напишите боту первым с основного телефона.</div>';
+                    return;
+                }
+
+                for (var i = 0; i < updates.length; i++) {
+                    if (updates[i].message) {
+                        var msg = updates[i].message;
+                        // Проверяем сообщения только от выбранного Chat ID
+                        if (msg.chat.id.toString() === chatId.toString()) {
+                            var isOut = msg.from.is_bot ? ' out' : ' in';
+                            var sender = msg.from.is_bot ? 'Вы' : (msg.from.first_name || 'Пользователь');
+                            html += '<div class="msg' + isOut + '"><b>' + sender + ':</b> ' + (msg.text || '[Медиафайл]') + '</div>';
+                        }
+                    }
+                }
+                chatBox.innerHTML = html;
+                chatBox.scrollTop = chatBox.scrollHeight; // Скролл вниз
+            }
+        };
+        xhr.send();
+    }
+
+    function sendMessage() {
+        var input = document.getElementById('msg-input');
+        var text = input.value;
+        if (text.trim() === '') return;
+
+        var url = 'https://telegram.org' + BOT_TOKEN + '/sendMessage?chat_id=' + chatId + '&text=' + encodeURIComponent(text);
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                input.value = '';
+                loadMessages();
+            }
+        };
+        xhr.send();
+    }
+
+    function clearSession() {
+        localStorage.removeItem('tg_chat_id_4s');
+        window.location.reload();
+    }
+</script>
+</body>
+</html>
+
